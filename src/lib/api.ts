@@ -11,6 +11,7 @@ type MenuItem = {
   tags: string[];
   available: boolean;
   visible: boolean;
+  sortOrder: number;
 };
 
 type Order = {
@@ -52,13 +53,19 @@ function rowToMenuItem(row: any): MenuItem {
     tags: row.tags ?? [],
     available: row.available ?? true,
     visible: row.visible ?? true,
+    sortOrder: row.sort_order ?? row.id,
   };
 }
 
 export async function fetchMenuItems(): Promise<MenuItem[]> {
-  const { data, error } = await supabase.from("menu_items").select("*").order("id");
+  const { data, error } = await supabase.from("menu_items").select("*").order("sort_order").order("id");
   if (error) throw error;
   return (data ?? []).map(rowToMenuItem);
+}
+
+export async function reorderMenuItem(id: number, sortOrder: number): Promise<void> {
+  const { error } = await supabase.from("menu_items").update({ sort_order: sortOrder }).eq("id", id);
+  if (error) throw error;
 }
 
 export async function toggleMenuItemAvailability(id: number, available: boolean): Promise<void> {
@@ -91,6 +98,7 @@ export async function syncMenuItems(prev: MenuItem[], next: MenuItem[]): Promise
       image_url: item.img,
       tags: item.tags,
       available: item.available,
+      sort_order: item.sortOrder,
     });
     if (error) throw error;
   }
@@ -111,6 +119,7 @@ export async function syncMenuItems(prev: MenuItem[], next: MenuItem[]): Promise
         image_url: item.img,
         tags: item.tags,
         available: item.available,
+        sort_order: item.sortOrder,
       })
       .eq("id", item.id);
     if (error) throw error;

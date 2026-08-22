@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import {
-  fetchMenuItems, syncMenuItems, uploadMenuImage, toggleMenuItemAvailability, toggleMenuItemVisibility,
+  fetchMenuItems, syncMenuItems, uploadMenuImage, toggleMenuItemAvailability, toggleMenuItemVisibility, reorderMenuItem,
   fetchSubscribers, syncSubscribers,
   fetchOrders, createOrder, deleteOrder, updateOrderStatus,
   fetchWeeklyPlans, syncWeeklyPlans,
@@ -20,6 +20,7 @@ type MenuItem = {
   tags: string[];
   available: boolean;
   visible: boolean;
+  sortOrder: number;
 };
 
 type CartItem = { id: number; name: string; price: number; qty: number; date: string };
@@ -194,12 +195,11 @@ function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item
 }
 
 // ─── Order Section ─────────────────────────────────────────────────────────────
-function OrderSection({ menuItems: allMenuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item: MenuItem, date: string) => void }) {
+function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { menuItems: MenuItem[]; onAdd: (item: MenuItem, date: string) => void; note: string; onNoteChange: (v: string) => void }) {
   const menuItems = allMenuItems.filter((m) => m.visible);
   const dates = useMemo(() => getAvailableDates(), []);
   const [selectedDate, setSelectedDate] = useState(dates[0].value);
   const [selectedItems, setSelectedItems] = useState<number[]>([]);
-  const [note, setNote] = useState("");
 
   const toggle = (id: number) => setSelectedItems((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
@@ -275,7 +275,7 @@ function OrderSection({ menuItems: allMenuItems, onAdd }: { menuItems: MenuItem[
                 <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#2D4A22", color: "#FAF7F2" }}>3</span>
                 Aclaraciones o alergias
               </h3>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej: sin cebolla, celíaco, alergia al maní..." rows={3} className="w-full rounded-xl p-4 resize-none outline-none" style={{ border: "1px solid #DDD8CF", background: "#FFFFFF", fontSize: "0.875rem", color: "#1A1A18" }} />
+              <textarea value={note} onChange={(e) => onNoteChange(e.target.value)} placeholder="Ej: sin cebolla, celíaco, alergia al maní..." rows={3} className="w-full rounded-xl p-4 resize-none outline-none" style={{ border: "1px solid #DDD8CF", background: "#FFFFFF", fontSize: "0.875rem", color: "#1A1A18" }} />
             </div>
           </div>
           <div className="lg:sticky lg:top-24 self-start">
@@ -605,7 +605,7 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
 
 type AdminTab = "pedidos" | "estadisticas" | "suscriptores" | "menu" | "planes";
 
-function AdminPanel({ orders, menuItems, subscribers, weeklyPlans, onClose, onMenuUpdate, onToggleAvailability, onToggleVisibility, onSubscribersUpdate, onWeeklyPlansUpdate, onOrderDelete, onOrderStatusChange, onOrderAddManual }: {
+function AdminPanel({ orders, menuItems, subscribers, weeklyPlans, onClose, onMenuUpdate, onToggleAvailability, onToggleVisibility, onReorderMenu, onSubscribersUpdate, onWeeklyPlansUpdate, onOrderDelete, onOrderStatusChange, onOrderAddManual }: {
   orders: Order[];
   menuItems: MenuItem[];
   subscribers: WeeklySubscriber[];
@@ -614,6 +614,7 @@ function AdminPanel({ orders, menuItems, subscribers, weeklyPlans, onClose, onMe
   onMenuUpdate: (items: MenuItem[]) => void;
   onToggleAvailability: (id: number, available: boolean) => void;
   onToggleVisibility: (id: number, visible: boolean) => void;
+  onReorderMenu: (id: number, direction: "up" | "down") => void;
   onSubscribersUpdate: (subs: WeeklySubscriber[]) => void;
   onWeeklyPlansUpdate: (plans: WeeklyPlan[]) => void;
   onOrderDelete: (id: string) => void;
@@ -680,8 +681,8 @@ function AdminPanel({ orders, menuItems, subscribers, weeklyPlans, onClose, onMe
 
           {/* Sidebar */}
           <aside
-            className="flex-shrink-0 flex flex-col gap-1 p-4 transition-transform duration-200 md:translate-x-0 md:static md:z-auto fixed top-[60px] bottom-0 left-0 z-20 w-64 md:w-56 overflow-y-auto"
-            style={{ background: "#FFFFFF", borderRight: "1px solid #DDD8CF", transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)" }}
+            className={`flex-shrink-0 flex flex-col gap-1 p-4 transition-transform duration-200 md:translate-x-0 md:static md:z-auto fixed top-[60px] bottom-0 left-0 z-20 w-64 md:w-56 overflow-y-auto ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+            style={{ background: "#FFFFFF", borderRight: "1px solid #DDD8CF" }}
           >
             {tabItems.map(([id, label, icon]) => (
               <button key={id} onClick={() => { setTab(id); setSidebarOpen(false); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all w-full" style={{ background: tab === id ? "#2D4A22" : "transparent", color: tab === id ? "#FAF7F2" : "#5A5A56", fontSize: "0.875rem" }}>
@@ -699,7 +700,7 @@ function AdminPanel({ orders, menuItems, subscribers, weeklyPlans, onClose, onMe
             {tab === "estadisticas" && <AdminStats orders={orders} />}
             {tab === "planes" && <AdminPlans plans={weeklyPlans} onUpdate={onWeeklyPlansUpdate} />}
             {tab === "suscriptores" && <AdminSubscribers subscribers={subscribers} plans={weeklyPlans} onUpdate={onSubscribersUpdate} />}
-            {tab === "menu" && <AdminMenu menuItems={menuItems} onUpdate={onMenuUpdate} onToggleAvailability={onToggleAvailability} onToggleVisibility={onToggleVisibility} />}
+            {tab === "menu" && <AdminMenu menuItems={menuItems} onUpdate={onMenuUpdate} onToggleAvailability={onToggleAvailability} onToggleVisibility={onToggleVisibility} onReorder={onReorderMenu} />}
           </main>
         </div>
       )}
@@ -891,7 +892,6 @@ function AdminOrders({ orders, menuItems, onDelete, onStatusChange, onAddManual 
                 <div>
                   <p style={{ fontSize: "0.75rem", color: "#5A5A56" }}>{order.timestamp}</p>
                   <p style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.1rem", color: "#1A1A18" }}>Pedido #{order.id}</p>
-                  {order.note && <p style={{ fontSize: "0.78rem", color: "#5A5A56", fontStyle: "italic" }}>{order.note}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   <select value={order.status} onChange={(e) => onStatusChange(order.id, e.target.value as Order["status"])} className="px-2 py-1 rounded-full text-xs font-medium capitalize outline-none" style={{ background: statusColor[order.status] + "20", color: statusColor[order.status], border: "none" }}>
@@ -919,6 +919,12 @@ function AdminOrders({ orders, menuItems, onDelete, onStatusChange, onAddManual 
                 <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "0.95rem" }}>Total</span>
                 <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1rem", color: "#C4622D", fontWeight: 600 }}>{formatPrice(order.total)}</span>
               </div>
+              {order.note && (
+                <div className="mt-3 pt-3" style={{ borderTop: "1px dashed #DDD8CF" }}>
+                  <p style={{ fontSize: "0.7rem", color: "#5A5A56", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.2rem" }}>Nota del cliente</p>
+                  <p style={{ fontSize: "0.85rem", color: "#1A1A18", fontStyle: "italic" }}>{order.note}</p>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1067,10 +1073,11 @@ function ItemForm({ item, onChange, onSave, onCancel, saveLabel }: { item: Omit<
   );
 }
 
-function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibility }: { menuItems: MenuItem[]; onUpdate: (items: MenuItem[]) => void; onToggleAvailability: (id: number, available: boolean) => void; onToggleVisibility: (id: number, visible: boolean) => void }) {
+function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibility, onReorder }: { menuItems: MenuItem[]; onUpdate: (items: MenuItem[]) => void; onToggleAvailability: (id: number, available: boolean) => void; onToggleVisibility: (id: number, visible: boolean) => void; onReorder: (id: number, direction: "up" | "down") => void }) {
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [showNew, setShowNew] = useState(false);
-  const [newItem, setNewItem] = useState<Omit<MenuItem, "id">>({ name: "", desc: "", price: 0, category: "principal", img: "", tags: [], available: true, visible: true });
+  const nextSortOrder = () => (menuItems.length > 0 ? Math.max(...menuItems.map((m) => m.sortOrder)) + 1 : 1);
+  const [newItem, setNewItem] = useState<Omit<MenuItem, "id">>({ name: "", desc: "", price: 0, category: "principal", img: "", tags: [], available: true, visible: true, sortOrder: nextSortOrder() });
 
   const saveEdit = () => {
     if (!editing) return;
@@ -1082,9 +1089,9 @@ function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibili
 
   const addNew = () => {
     if (!newItem.name.trim()) return;
-    const item: MenuItem = { ...newItem, id: Date.now(), tags: newItem.tags };
+    const item: MenuItem = { ...newItem, id: Date.now(), tags: newItem.tags, sortOrder: nextSortOrder() };
     onUpdate([...menuItems, item]);
-    setNewItem({ name: "", desc: "", price: 0, category: "principal", img: "", tags: [], available: true, visible: true });
+    setNewItem({ name: "", desc: "", price: 0, category: "principal", img: "", tags: [], available: true, visible: true, sortOrder: nextSortOrder() });
     setShowNew(false);
   };
 
@@ -1108,10 +1115,18 @@ function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibili
       )}
 
       <div className="space-y-3">
-        {menuItems.map((item) => (
+        {menuItems.map((item, idx) => (
           <div key={item.id} className="rounded-2xl overflow-hidden" style={{ background: "#FFFFFF", border: item.available ? "1px solid #DDD8CF" : "1px solid #E8B8A0", opacity: item.visible ? (item.available ? 1 : 0.75) : 0.5 }}>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4">
               <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                <div className="flex flex-col gap-1 flex-shrink-0">
+                  <button onClick={() => onReorder(item.id, "up")} disabled={idx === 0} className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-25 hover:bg-gray-100" style={{ color: "#5A5A56" }} aria-label="Mover arriba">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="18 15 12 9 6 15"/></svg>
+                  </button>
+                  <button onClick={() => onReorder(item.id, "down")} disabled={idx === menuItems.length - 1} className="w-6 h-6 rounded flex items-center justify-center disabled:opacity-25 hover:bg-gray-100" style={{ color: "#5A5A56" }} aria-label="Mover abajo">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                </div>
                 <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0" style={{ background: "#E8E3D8" }}>
                   <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
                 </div>
@@ -1284,6 +1299,7 @@ function Footer({ onAdminClick }: { onAdminClick: () => void }) {
 export default function App() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [orderNote, setOrderNote] = useState("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [subscribers, setSubscribers] = useState<WeeklySubscriber[]>([]);
   const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
@@ -1347,6 +1363,29 @@ export default function App() {
     }
   };
 
+  const handleReorderMenu = async (id: number, direction: "up" | "down") => {
+    const prev = menuItems;
+    const idx = prev.findIndex((m) => m.id === id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= prev.length) return;
+
+    const a = prev[idx];
+    const b = prev[swapIdx];
+    const next = [...prev];
+    next[idx] = { ...b, sortOrder: a.sortOrder };
+    next[swapIdx] = { ...a, sortOrder: b.sortOrder };
+    next.sort((x, y) => x.sortOrder - y.sortOrder);
+    setMenuItems(next); // instantáneo
+
+    try {
+      await Promise.all([reorderMenuItem(a.id, b.sortOrder), reorderMenuItem(b.id, a.sortOrder)]);
+    } catch (err) {
+      console.error(err);
+      setMenuItems(prev);
+      alert("No se pudo reordenar el menú. Intentá de nuevo.");
+    }
+  };
+
   const handleSubscribersUpdate = async (next: WeeklySubscriber[]) => {
     const prev = subscribers;
     setSubscribers(next);
@@ -1388,13 +1427,15 @@ export default function App() {
     const items = cart.map((c) => ({ name: c.name, price: c.price, qty: c.qty, date: c.date }));
     const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
     try {
-      const updated = await createOrder(items, total);
+      const updated = await createOrder(items, total, orderNote);
       setOrders(updated);
       setCart([]);
+      setOrderNote("");
     } catch (err) {
       console.error(err);
       alert("No se pudo registrar el pedido en la base de datos. El mensaje de WhatsApp se envía igual, pero avisale al admin.");
       setCart([]);
+      setOrderNote("");
     }
   };
 
@@ -1461,7 +1502,7 @@ export default function App() {
       <Nav cartCount={cartCount} onCartClick={() => setDrawerOpen(true)} onAdminClick={() => setAdminOpen(true)} />
       <Hero />
       <MenuSection menuItems={menuItems} onAdd={addToCart} />
-      <OrderSection menuItems={menuItems} onAdd={addToCart} />
+      <OrderSection menuItems={menuItems} onAdd={addToCart} note={orderNote} onNoteChange={setOrderNote} />
       <ViandasSection plans={weeklyPlans} />
       <GallerySection />
       <ContactSection />
@@ -1481,6 +1522,7 @@ export default function App() {
           onMenuUpdate={handleMenuUpdate}
           onToggleAvailability={handleToggleAvailability}
           onToggleVisibility={handleToggleVisibility}
+          onReorderMenu={handleReorderMenu}
           onSubscribersUpdate={handleSubscribersUpdate}
           onWeeklyPlansUpdate={handleWeeklyPlansUpdate}
           onOrderDelete={handleOrderDelete}
