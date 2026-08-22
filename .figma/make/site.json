@@ -1,0 +1,10 @@
+{
+  "description": "Enables users to order homemade meals and weekly meal plans up to a week in advance, streamlining food sales and delivery scheduling.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
