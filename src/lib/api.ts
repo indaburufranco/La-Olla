@@ -34,9 +34,11 @@ type WeeklySubscriber = {
 
 // ─── Menú ───────────────────────────────────────────────────────────────────
 export async function uploadMenuImage(file: File): Promise<string> {
-  const ext = file.name.split(".").pop();
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await supabase.storage.from("menu-images").upload(fileName, file);
+  const { error } = await supabase.storage.from("menu-images").upload(fileName, file, {
+    contentType: file.type || "image/jpeg",
+  });
   if (error) throw error;
   const { data } = supabase.storage.from("menu-images").getPublicUrl(fileName);
   return data.publicUrl;

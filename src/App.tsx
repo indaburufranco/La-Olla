@@ -1028,7 +1028,8 @@ function ItemForm({ item, onChange, onSave, onCancel, saveLabel }: { item: Omit<
       onChange("img", url);
     } catch (err) {
       console.error(err);
-      setUploadError("No se pudo subir la imagen. Probá de nuevo.");
+      const detail = err instanceof Error ? err.message : String(err);
+      setUploadError(`No se pudo subir la imagen: ${detail}`);
     } finally {
       setUploading(false);
     }
