@@ -123,40 +123,72 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 }
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
+const NAV_LINKS = [
+  { href: "#menu", label: "Menú del día" },
+  { href: "#pedidos", label: "Hacer pedido" },
+  { href: "#viandas", label: "Viandas semanales" },
+  { href: "#contacto", label: "Contacto" },
+];
+
 function Nav({ cartCount, onCartClick, onAdminClick }: { cartCount: number; onCartClick: () => void; onAdminClick: () => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
+
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4" style={{ background: "rgba(250,247,242,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #DDD8CF" }}>
-      <button
-        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        className="flex items-center gap-2.5 text-left hover:opacity-75 transition-opacity"
-      >
-        <img src="/logo-la-olla.png" alt="" className="h-9 w-9 object-contain flex-shrink-0" />
-        <span className="flex flex-col leading-none">
-          <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.35rem", fontWeight: 600, color: "#2D4A22" }}>{siteConfig.businessName}</span>
-          <span style={{ fontSize: "0.65rem", letterSpacing: "0.15em", color: "#5A5A56", textTransform: "uppercase" }}>{siteConfig.tagline}</span>
-        </span>
-      </button>
+    <nav className="fixed top-0 left-0 right-0 z-50" style={{ background: "rgba(250,247,242,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #DDD8CF" }}>
+      <div className="flex items-center justify-between px-6 py-4">
+        <button
+          onClick={() => { window.scrollTo({ top: 0, behavior: "smooth" }); setMenuOpen(false); }}
+          className="flex items-center gap-2.5 text-left hover:opacity-75 transition-opacity"
+        >
+          <img src="/logo-la-olla.png" alt="" className="h-9 w-9 object-contain flex-shrink-0" />
+          <span className="flex flex-col leading-none">
+            <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.35rem", fontWeight: 600, color: "#2D4A22" }}>{siteConfig.businessName}</span>
+            <span style={{ fontSize: "0.65rem", letterSpacing: "0.15em", color: "#5A5A56", textTransform: "uppercase" }}>{siteConfig.tagline}</span>
+          </span>
+        </button>
 
-      <div className="hidden md:flex items-center gap-8" style={{ fontSize: "0.85rem", color: "#5A5A56" }}>
-        <a href="#menu" className="hover:text-[#C4622D] transition-colors">Menú del día</a>
-        <a href="#pedidos" className="hover:text-[#C4622D] transition-colors">Hacer pedido</a>
-        <a href="#viandas" className="hover:text-[#C4622D] transition-colors">Viandas semanales</a>
-        <a href="#contacto" className="hover:text-[#C4622D] transition-colors">Contacto</a>
+        <div className="hidden md:flex items-center gap-8" style={{ fontSize: "0.85rem", color: "#5A5A56" }}>
+          {NAV_LINKS.map((l) => (
+            <a key={l.href} href={l.href} className="hover:text-[#C4622D] transition-colors">{l.label}</a>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1 md:gap-3">
+          <button onClick={onAdminClick} className="flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg transition-colors hover:bg-[#F0EBE1]" style={{ fontSize: "0.75rem", color: "#5A5A56" }} aria-label="Panel administrador">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span className="hidden md:inline">Admin</span>
+          </button>
+          <button onClick={onCartClick} className="relative flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:opacity-80" style={{ background: "#2D4A22", color: "#FAF7F2", fontSize: "0.85rem" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            <span>Pedido</span>
+            {cartCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#C4622D", color: "#FAF7F2" }}>{cartCount}</span>
+            )}
+          </button>
+          <button onClick={() => setMenuOpen((v) => !v)} aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"} aria-expanded={menuOpen} className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center transition-colors hover:bg-[#F0EBE1] flex-shrink-0" style={{ color: "#2D4A22" }}>
+            {menuOpen ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button onClick={onAdminClick} className="flex items-center gap-1.5 px-2 md:px-3 py-2 rounded-lg transition-colors hover:bg-[#F0EBE1]" style={{ fontSize: "0.75rem", color: "#5A5A56" }} aria-label="Panel administrador">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span className="hidden md:inline">Admin</span>
-        </button>
-        <button onClick={onCartClick} className="relative flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:opacity-80" style={{ background: "#2D4A22", color: "#FAF7F2", fontSize: "0.85rem" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-          <span>Pedido</span>
-          {cartCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: "#C4622D", color: "#FAF7F2" }}>{cartCount}</span>
-          )}
-        </button>
-      </div>
+      {menuOpen && (
+        <div className="md:hidden flex flex-col px-6 pb-3" style={{ borderTop: "1px solid #DDD8CF" }}>
+          {NAV_LINKS.map((l) => (
+            <a key={l.href} href={l.href} onClick={() => setMenuOpen(false)} className="py-3.5" style={{ fontSize: "0.9rem", color: "#1A1A18", borderBottom: "1px solid #DDD8CF" }}>{l.label}</a>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }
