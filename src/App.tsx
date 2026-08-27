@@ -70,10 +70,13 @@ function Nav({ cartCount, onCartClick, onAdminClick }: { cartCount: number; onCa
     <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4" style={{ background: "rgba(250,247,242,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid #DDD8CF" }}>
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        className="flex flex-col leading-none text-left hover:opacity-75 transition-opacity"
+        className="flex items-center gap-2.5 text-left hover:opacity-75 transition-opacity"
       >
-        <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.35rem", fontWeight: 600, color: "#2D4A22" }}>{siteConfig.businessName}</span>
-        <span style={{ fontSize: "0.65rem", letterSpacing: "0.15em", color: "#5A5A56", textTransform: "uppercase" }}>{siteConfig.tagline}</span>
+        <img src="/logo-la-olla.png" alt="" className="h-9 w-9 object-contain flex-shrink-0" />
+        <span className="flex flex-col leading-none">
+          <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.35rem", fontWeight: 600, color: "#2D4A22" }}>{siteConfig.businessName}</span>
+          <span style={{ fontSize: "0.65rem", letterSpacing: "0.15em", color: "#5A5A56", textTransform: "uppercase" }}>{siteConfig.tagline}</span>
+        </span>
       </button>
 
       <div className="hidden md:flex items-center gap-8" style={{ fontSize: "0.85rem", color: "#5A5A56" }}>
@@ -105,7 +108,7 @@ function Hero() {
   return (
     <section className="relative min-h-screen flex items-end pb-24 pt-20 overflow-hidden" style={{ background: "#2D4A22" }}>
       <div className="absolute inset-0">
-        <img src="https://images.unsplash.com/photo-1650855543392-44edbd4e03cf?w=1600&h=1000&fit=crop&auto=format" alt="Mesa con comida casera abundante" className="w-full h-full object-cover opacity-40" />
+        <img src="https://images.unsplash.com/photo-1650855543392-44edbd4e03cf?w=1600&h=1000&fit=crop&auto=format" alt="Mesa con comida casera abundante" fetchPriority="high" className="w-full h-full object-cover opacity-40" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, #2D4A22 40%, transparent 100%)" }} />
       </div>
       <div className="relative z-10 max-w-6xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-end w-full">
@@ -150,6 +153,7 @@ function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item
           <div>
             <p style={{ fontSize: "0.7rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#C4622D", marginBottom: "0.5rem" }}>Lo que cocinamos hoy</p>
             <h2 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "clamp(2rem, 4vw, 3rem)", color: "#1A1A18", fontWeight: 400 }}>Menú del día</h2>
+            <p className="mt-2" style={{ color: "#5A5A56", fontSize: "0.8rem" }}>"+ Agregar" acá pide para {dates[0].dayName} {dates[0].label}. ¿Otro día? Elegilo más abajo en "Hacer un pedido".</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             {CATEGORIES.map((c) => (
@@ -161,7 +165,7 @@ function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item
           {filtered.map((item) => (
             <article key={item.id} className="rounded-2xl overflow-hidden group" style={{ background: "#FFFFFF", border: "1px solid #DDD8CF", opacity: item.available ? 1 : 0.6 }}>
               <div className="relative h-48 overflow-hidden" style={{ background: "#E8E3D8" }}>
-                <img src={item.img} alt={item.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" style={{ filter: item.available ? "none" : "grayscale(60%)" }} />
+                <img src={item.img} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" style={{ filter: item.available ? "none" : "grayscale(60%)" }} />
                 {item.tags.length > 0 && (
                   <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
                     {item.tags.map((t) => <span key={t} className="px-2 py-0.5 rounded-full text-xs" style={{ background: "rgba(45,74,34,0.85)", color: "#FAF7F2", backdropFilter: "blur(4px)" }}>{t}</span>)}
@@ -195,23 +199,28 @@ function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item
 }
 
 // ─── Order Section ─────────────────────────────────────────────────────────────
-function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { menuItems: MenuItem[]; onAdd: (item: MenuItem, date: string) => void; note: string; onNoteChange: (v: string) => void }) {
+function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { menuItems: MenuItem[]; onAdd: (item: MenuItem, date: string, qty?: number) => void; note: string; onNoteChange: (v: string) => void }) {
   const menuItems = allMenuItems.filter((m) => m.visible);
   const dates = useMemo(() => getAvailableDates(), []);
   const [selectedDate, setSelectedDate] = useState(dates[0].value);
-  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [qtyById, setQtyById] = useState<Record<number, number>>({});
 
-  const toggle = (id: number) => setSelectedItems((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const changeQty = (id: number, delta: number) => setQtyById((prev) => {
+    const next = Math.max(0, (prev[id] ?? 0) + delta);
+    return { ...prev, [id]: next };
+  });
+
+  const selectedEntries = (Object.entries(qtyById) as [string, number][]).filter(([, qty]) => qty > 0);
 
   const handleAdd = () => {
-    selectedItems.forEach((id) => {
-      const item = menuItems.find((m) => m.id === id);
-      if (item) onAdd(item, selectedDate);
+    selectedEntries.forEach(([id, qty]) => {
+      const item = menuItems.find((m) => m.id === Number(id));
+      if (item) onAdd(item, selectedDate, qty);
     });
-    setSelectedItems([]);
+    setQtyById({});
   };
 
-  const total = selectedItems.reduce((s, id) => s + (menuItems.find((m) => m.id === id)?.price ?? 0), 0);
+  const total = selectedEntries.reduce((s, [id, qty]) => s + (menuItems.find((m) => m.id === Number(id))?.price ?? 0) * qty, 0);
   const selectedDateLabel = dates.find((d) => d.value === selectedDate);
 
   return (
@@ -246,11 +255,11 @@ function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { 
               </h3>
               <div className="space-y-2.5">
                 {menuItems.map((item) => {
-                  const sel = selectedItems.includes(item.id);
+                  const qty = qtyById[item.id] ?? 0;
                   return (
-                    <div key={item.id} onClick={() => toggle(item.id)} className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all" style={{ background: "#FFFFFF", border: sel ? "1.5px solid #2D4A22" : "1px solid #DDD8CF" }}>
+                    <div key={item.id} className="flex items-center gap-4 p-4 rounded-xl transition-all" style={{ background: "#FFFFFF", border: qty > 0 ? "1.5px solid #2D4A22" : "1px solid #DDD8CF" }}>
                       <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0" style={{ background: "#E8E3D8" }}>
-                        <img src={item.img} alt={item.name} className="w-full h-full object-cover" />
+                        <img src={item.img} alt={item.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -258,12 +267,12 @@ function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { 
                           <span className="text-xs capitalize px-2 py-0.5 rounded-full" style={{ background: "#F0EBE1", color: "#5A5A56" }}>{item.category}</span>
                         </div>
                         <p style={{ fontSize: "0.78rem", color: "#5A5A56" }}>{item.desc}</p>
+                        <div style={{ fontFamily: "Fraunces, Georgia, serif", color: "#C4622D", fontWeight: 600, fontSize: "0.9rem", marginTop: "0.2rem" }}>{formatPrice(item.price)}</div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <div style={{ fontFamily: "Fraunces, Georgia, serif", color: "#C4622D", fontWeight: 600 }}>{formatPrice(item.price)}</div>
-                        <div className={`mt-1 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all`} style={{ borderColor: sel ? "#2D4A22" : "#DDD8CF", background: sel ? "#2D4A22" : "transparent" }}>
-                          {sel && <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="#FAF7F2" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                        </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <button type="button" onClick={() => changeQty(item.id, -1)} disabled={qty === 0} aria-label={`Quitar una unidad de ${item.name}`} className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-30 transition-colors hover:bg-[#F0EBE1]" style={{ border: "1px solid #DDD8CF", color: "#5A5A56" }}>−</button>
+                        <span style={{ minWidth: "1.2rem", textAlign: "center", fontSize: "0.95rem", color: "#1A1A18" }} aria-live="polite">{qty}</span>
+                        <button type="button" onClick={() => changeQty(item.id, 1)} aria-label={`Agregar una unidad de ${item.name}`} className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-[#F0EBE1]" style={{ border: "1px solid #DDD8CF", color: "#2D4A22" }}>+</button>
                       </div>
                     </div>
                   );
@@ -281,22 +290,22 @@ function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { 
           <div className="lg:sticky lg:top-24 self-start">
             <div className="rounded-2xl p-6" style={{ background: "#FFFFFF", border: "1px solid #DDD8CF" }}>
               <h3 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.1rem", color: "#1A1A18", marginBottom: "1rem" }}>Resumen del pedido</h3>
-              {selectedItems.length === 0 ? (
+              {selectedEntries.length === 0 ? (
                 <p style={{ fontSize: "0.85rem", color: "#5A5A56", textAlign: "center", padding: "2rem 0" }}>Seleccioná platos para armar tu pedido</p>
               ) : (
                 <div className="space-y-3 mb-4">
-                  {selectedItems.map((id) => {
-                    const item = menuItems.find((m) => m.id === id)!;
+                  {selectedEntries.map(([id, qty]) => {
+                    const item = menuItems.find((m) => m.id === Number(id))!;
                     return (
                       <div key={id} className="flex justify-between gap-2" style={{ fontSize: "0.85rem" }}>
-                        <span style={{ color: "#1A1A18" }}>{item.name}</span>
-                        <span style={{ color: "#C4622D", fontWeight: 500 }}>{formatPrice(item.price)}</span>
+                        <span style={{ color: "#1A1A18" }}>{item.name} {qty > 1 && <strong>×{qty}</strong>}</span>
+                        <span style={{ color: "#C4622D", fontWeight: 500 }}>{formatPrice(item.price * qty)}</span>
                       </div>
                     );
                   })}
                 </div>
               )}
-              {selectedItems.length > 0 && (
+              {selectedEntries.length > 0 && (
                 <>
                   <div className="py-3 my-2" style={{ borderTop: "1px solid #DDD8CF", borderBottom: "1px solid #DDD8CF" }}>
                     <div className="flex justify-between mt-2">
@@ -312,7 +321,7 @@ function OrderSection({ menuItems: allMenuItems, onAdd, note, onNoteChange }: { 
                   )}
                 </>
               )}
-              <button onClick={handleAdd} disabled={selectedItems.length === 0} className="w-full py-3 rounded-xl font-medium transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: "#C4622D", color: "#FAF7F2", fontSize: "0.9rem" }}>
+              <button onClick={handleAdd} disabled={selectedEntries.length === 0} className="w-full py-3 rounded-xl font-medium transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: "#C4622D", color: "#FAF7F2", fontSize: "0.9rem" }}>
                 Agregar al carrito
               </button>
             </div>
@@ -353,7 +362,7 @@ function ViandasSection({ plans }: { plans: WeeklyPlan[] }) {
         ) : (
         <div className="grid md:grid-cols-3 gap-5 mb-10">
           {plans.map((plan) => (
-            <div key={plan.id} onClick={() => setSelected(plan.id)} className="rounded-2xl p-7 cursor-pointer transition-all relative" style={{ background: plan.bgColor, outline: selected === plan.id ? "2px solid #C4622D" : "2px solid transparent", outlineOffset: "2px" }}>
+            <div key={plan.id} className="rounded-2xl p-7 transition-all relative" style={{ background: plan.bgColor, outline: selected === plan.id ? "2px solid #C4622D" : "2px solid transparent", outlineOffset: "2px" }}>
               {plan.highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold" style={{ background: "#C4622D", color: "#FAF7F2" }}>Más popular</div>
               )}
@@ -370,7 +379,7 @@ function ViandasSection({ plans }: { plans: WeeklyPlan[] }) {
                   </li>
                 ))}
               </ul>
-              <button onClick={(e) => { e.stopPropagation(); setSelected(plan.id); }} className="w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:opacity-80" style={{ background: plan.highlight ? "#C4622D" : "#2D4A22", color: "#FAF7F2" }}>
+              <button onClick={() => setSelected(plan.id)} aria-pressed={selected === plan.id} className="w-full py-2.5 rounded-xl text-sm font-medium transition-all hover:opacity-80" style={{ background: plan.highlight ? "#C4622D" : "#2D4A22", color: "#FAF7F2" }}>
                 {selected === plan.id ? "✓ Seleccionado" : "Elegir este plan"}
               </button>
             </div>
@@ -414,7 +423,7 @@ function GallerySection() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[{ id: "1671225603584-8412a795a2d2", h: "h-64", span: "col-span-2" }, { id: "1543352632-5a4b24e4d2a6", h: "h-64", span: "" }, { id: "1543352632-fea6d4f83e78", h: "h-64", span: "" }, { id: "1667499745120-f9bcef8f584e", h: "h-48", span: "" }, { id: "1569420077790-afb136b3bb8c", h: "h-48", span: "col-span-2" }, { id: "1774290687310-eb245b815517", h: "h-48", span: "" }].map((img, i) => (
             <div key={i} className={`${img.span} ${img.h} rounded-2xl overflow-hidden`} style={{ background: "#E8E3D8" }}>
-              <img src={`https://images.unsplash.com/photo-${img.id}?w=600&h=400&fit=crop&auto=format`} alt="Comida casera" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+              <img src={`https://images.unsplash.com/photo-${img.id}?w=600&h=400&fit=crop&auto=format`} alt="Comida casera" loading="lazy" decoding="async" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
             </div>
           ))}
         </div>
@@ -462,12 +471,12 @@ function ContactSection() {
           {[{ id: "nombre", label: "Nombre", type: "text", placeholder: "Tu nombre" }, { id: "tel", label: "Tu teléfono (opcional)", type: "tel", placeholder: "+598 09..." }].map((f) => (
             <div key={f.id}>
               <label style={{ fontSize: "0.75rem", color: "#5A5A56", display: "block", marginBottom: "0.4rem" }}>{f.label}</label>
-              <input type={f.type} placeholder={f.placeholder} value={form[f.id as keyof typeof form]} onChange={(e) => setForm((p) => ({ ...p, [f.id]: e.target.value }))} className="w-full px-4 py-3 rounded-xl outline-none" style={{ border: "1px solid #DDD8CF", background: "#FFFFFF", fontSize: "0.875rem" }} />
+              <input type={f.type} required={f.id !== "tel"} placeholder={f.placeholder} value={form[f.id as keyof typeof form]} onChange={(e) => setForm((p) => ({ ...p, [f.id]: e.target.value }))} className="w-full px-4 py-3 rounded-xl outline-none" style={{ border: "1px solid #DDD8CF", background: "#FFFFFF", fontSize: "0.875rem" }} />
             </div>
           ))}
           <div>
             <label style={{ fontSize: "0.75rem", color: "#5A5A56", display: "block", marginBottom: "0.4rem" }}>Mensaje</label>
-            <textarea rows={4} placeholder="¿En qué te podemos ayudar?" value={form.msg} onChange={(e) => setForm((p) => ({ ...p, msg: e.target.value }))} className="w-full px-4 py-3 rounded-xl outline-none resize-none" style={{ border: "1px solid #DDD8CF", background: "#FFFFFF", fontSize: "0.875rem" }} />
+            <textarea rows={4} required placeholder="¿En qué te podemos ayudar?" value={form.msg} onChange={(e) => setForm((p) => ({ ...p, msg: e.target.value }))} className="w-full px-4 py-3 rounded-xl outline-none resize-none" style={{ border: "1px solid #DDD8CF", background: "#FFFFFF", fontSize: "0.875rem" }} />
           </div>
           <button type="submit" className="w-full py-3 rounded-xl font-medium transition-all hover:opacity-80 flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#FFFFFF" }}>
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.527 5.847L0 24l6.343-1.503A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.817 9.817 0 01-5.003-1.368l-.36-.214-3.727.883.932-3.632-.235-.373A9.818 9.818 0 0112 2.182c5.426 0 9.818 4.392 9.818 9.818 0 5.427-4.392 9.818-9.818 9.818z"/></svg>
@@ -587,11 +596,11 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label style={{ fontSize: "0.75rem", color: "#5A5A56", display: "block", marginBottom: "0.4rem" }}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@laolla.com" className="w-full px-4 py-3 rounded-xl outline-none" style={{ border: `1px solid ${err ? "#C4622D" : "#DDD8CF"}`, background: "#FAF7F2", fontSize: "0.875rem" }} />
+            <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@laolla.com" className="w-full px-4 py-3 rounded-xl outline-none" style={{ border: `1px solid ${err ? "#C4622D" : "#DDD8CF"}`, background: "#FAF7F2", fontSize: "0.875rem" }} />
           </div>
           <div>
             <label style={{ fontSize: "0.75rem", color: "#5A5A56", display: "block", marginBottom: "0.4rem" }}>Contraseña</label>
-            <input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 rounded-xl outline-none" style={{ border: `1px solid ${err ? "#C4622D" : "#DDD8CF"}`, background: "#FAF7F2", fontSize: "0.875rem" }} />
+            <input type="password" autoComplete="current-password" required value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 rounded-xl outline-none" style={{ border: `1px solid ${err ? "#C4622D" : "#DDD8CF"}`, background: "#FAF7F2", fontSize: "0.875rem" }} />
             {err && <p style={{ fontSize: "0.75rem", color: "#C4622D", marginTop: "0.3rem" }}>{err}</p>}
           </div>
           <button type="submit" disabled={loading} className="w-full py-3 rounded-xl font-medium transition-all hover:opacity-80 disabled:opacity-60" style={{ background: "#2D4A22", color: "#FAF7F2" }}>
@@ -1287,9 +1296,12 @@ function Footer({ onAdminClick }: { onAdminClick: () => void }) {
   return (
     <footer className="py-12 px-6" style={{ background: "#2D4A22" }}>
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-        <div>
-          <p style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.2rem", color: "#FAF7F2" }}>{siteConfig.businessName}</p>
-          <p style={{ fontSize: "0.75rem", color: "#8FA887", marginTop: "0.2rem" }}>{siteConfig.footerTagline}</p>
+        <div className="flex items-center gap-2.5">
+          <img src="/logo-la-olla.png" alt="" className="h-8 w-8 object-contain flex-shrink-0" />
+          <div>
+            <p style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.2rem", color: "#FAF7F2" }}>{siteConfig.businessName}</p>
+            <p style={{ fontSize: "0.75rem", color: "#8FA887", marginTop: "0.2rem" }}>{siteConfig.footerTagline}</p>
+          </div>
         </div>
         <p style={{ fontSize: "0.78rem", color: "#8FA887" }}>Hecho con amor y buenos ingredientes · {new Date().getFullYear()}</p>
         <button onClick={onAdminClick} className="text-xs transition-colors hover:text-white" style={{ color: "#8FA887" }}>
@@ -1417,11 +1429,11 @@ export default function App() {
     }
   };
 
-  const addToCart = (item: MenuItem, date: string) => {
+  const addToCart = (item: MenuItem, date: string, qty = 1) => {
     setCart((prev) => {
       const ex = prev.find((c) => c.id === item.id && c.date === date);
-      if (ex) return prev.map((c) => c.id === item.id && c.date === date ? { ...c, qty: c.qty + 1 } : c);
-      return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1, date }];
+      if (ex) return prev.map((c) => c.id === item.id && c.date === date ? { ...c, qty: c.qty + qty } : c);
+      return [...prev, { id: item.id, name: item.name, price: item.price, qty, date }];
     });
   };
 
@@ -1481,6 +1493,18 @@ export default function App() {
     document.body.style.overflow = adminOpen || drawerOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [adminOpen, drawerOpen]);
+
+  // Cerrar el carrito o el panel admin con la tecla Escape
+  useEffect(() => {
+    if (!drawerOpen && !adminOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (drawerOpen) setDrawerOpen(false);
+      else if (adminOpen) setAdminOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [drawerOpen, adminOpen]);
 
   if (loadingData) {
     return (
