@@ -152,5 +152,5 @@
 # futuro se importe desde src/) tiene que quedar como blob normal de Git, o
 # el build publica el puntero de texto de LFS en vez del archivo real.
 # ---------------------------------------------------------------------------
-public/** -filter -diff -merge -text
-src/**    -filter -diff -merge -text
+public/** -filter
+src/**    -filter

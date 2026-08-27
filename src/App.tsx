@@ -197,7 +197,7 @@ function Hero() {
 }
 
 // ─── Menu Section ─────────────────────────────────────────────────────────────
-function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item: MenuItem, date: string) => void }) {
+function MenuSection({ menuItems, cart, onChangeQty }: { menuItems: MenuItem[]; cart: CartItem[]; onChangeQty: (item: MenuItem, date: string, delta: number) => void }) {
   const [cat, setCat] = useState("todos");
   const dates = useMemo(() => getAvailableDates(), []);
   const [selectedDate] = useState(dates[0].value);
@@ -220,7 +220,9 @@ function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item
           </div>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map((item) => (
+          {filtered.map((item) => {
+            const qty = cart.find((c) => c.id === item.id && c.date === selectedDate)?.qty ?? 0;
+            return (
             <article key={item.id} className="rounded-2xl overflow-hidden group" style={{ background: "#FFFFFF", border: "1px solid #DDD8CF", opacity: item.available ? 1 : 0.6 }}>
               <div className="relative h-48 overflow-hidden" style={{ background: "#E8E3D8" }}>
                 <img src={item.img} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" style={{ filter: item.available ? "none" : "grayscale(60%)" }} />
@@ -241,12 +243,27 @@ function MenuSection({ menuItems, onAdd }: { menuItems: MenuItem[]; onAdd: (item
                   <span style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.1rem", color: "#C4622D", fontWeight: 600, whiteSpace: "nowrap" }}>{formatPrice(item.price)}</span>
                 </div>
                 <p style={{ fontSize: "0.82rem", color: "#5A5A56", lineHeight: 1.5 }}>{item.desc}</p>
-                <button onClick={() => onAdd(item, selectedDate)} disabled={!item.available} className="mt-4 w-full py-2.5 rounded-xl font-medium transition-all hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: "#2D4A22", color: "#FAF7F2", fontSize: "0.85rem" }}>
-                  {item.available ? "+ Agregar al pedido" : "Agotado hoy"}
-                </button>
+                {qty > 0 && item.available ? (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="flex-shrink-0 flex items-center gap-1 py-2.5 px-3 rounded-xl font-medium" style={{ background: "#2D4A22", color: "#FAF7F2", fontSize: "0.78rem" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      Agregado
+                    </span>
+                    <div className="flex-1 flex items-center justify-between gap-2 py-1 px-2 rounded-xl" style={{ border: "1px solid #DDD8CF" }}>
+                      <button type="button" onClick={() => onChangeQty(item, selectedDate, -1)} aria-label={`Quitar una unidad de ${item.name}`} className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-[#F0EBE1]" style={{ color: "#5A5A56" }}>−</button>
+                      <span style={{ fontSize: "0.9rem", color: "#1A1A18" }} aria-live="polite">{qty}</span>
+                      <button type="button" onClick={() => onChangeQty(item, selectedDate, 1)} aria-label={`Agregar una unidad de ${item.name}`} className="w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-[#F0EBE1]" style={{ color: "#2D4A22" }}>+</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => onChangeQty(item, selectedDate, 1)} disabled={!item.available} className="mt-4 w-full py-2.5 rounded-xl font-medium transition-all hover:opacity-80 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: "#2D4A22", color: "#FAF7F2", fontSize: "0.85rem" }}>
+                    {item.available ? "+ Agregar al pedido" : "Agotado hoy"}
+                  </button>
+                )}
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
         {filtered.length === 0 && (
           <div className="text-center py-16" style={{ color: "#5A5A56" }}>No hay platos en esta categoría por el momento.</div>
@@ -547,7 +564,7 @@ function ContactSection() {
 }
 
 // ─── Cart Drawer ──────────────────────────────────────────────────────────────
-function CartDrawer({ cart, onClose, onRemove, onClear, onConfirm }: { cart: CartItem[]; onClose: () => void; onRemove: (id: number, date: string) => void; onClear: () => void; onConfirm: () => void }) {
+function CartDrawer({ cart, onClose, onRemove, onChangeQty, onClear, onConfirm }: { cart: CartItem[]; onClose: () => void; onRemove: (id: number, date: string) => void; onChangeQty: (id: number, date: string, delta: number) => void; onClear: () => void; onConfirm: () => void }) {
   const total = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const dates = useMemo(() => getAvailableDates(), []);
   const labelFor = (val: string) => { const d = dates.find((d) => d.value === val); return d ? `${d.dayName} ${d.label}` : val; };
@@ -589,14 +606,23 @@ function CartDrawer({ cart, onClose, onRemove, onClear, onConfirm }: { cart: Car
               </p>
               <div className="space-y-2.5">
                 {items.map((item) => (
-                  <div key={`${item.id}-${date}`} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "#FFFFFF", border: "1px solid #DDD8CF" }}>
-                    <div className="flex-1 min-w-0">
+                  <div key={`${item.id}-${date}`} className="p-3 rounded-xl" style={{ background: "#FFFFFF", border: "1px solid #DDD8CF" }}>
+                    <div className="flex items-start justify-between gap-2">
                       <p style={{ fontSize: "0.875rem", color: "#1A1A18", fontWeight: 500 }}>{item.name}</p>
-                      <p style={{ fontSize: "0.78rem", color: "#C4622D" }}>{formatPrice(item.price)}</p>
+                      <button onClick={() => onRemove(item.id, date)} aria-label={`Quitar ${item.name} del pedido`} className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-red-50 transition-colors flex-shrink-0" style={{ color: "#5A5A56" }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                      </button>
                     </div>
-                    <button onClick={() => onRemove(item.id, date)} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-50 transition-colors" style={{ color: "#5A5A56" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                    </button>
+                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                      <p style={{ fontSize: "0.78rem", color: "#C4622D" }}>
+                        {formatPrice(item.price)}{item.qty > 1 && <span style={{ color: "#5A5A56" }}> c/u · {formatPrice(item.price * item.qty)}</span>}
+                      </p>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button type="button" onClick={() => onChangeQty(item.id, date, -1)} aria-label={`Quitar una unidad de ${item.name}`} className="w-6 h-6 rounded-full flex items-center justify-center transition-colors hover:bg-[#F0EBE1]" style={{ border: "1px solid #DDD8CF", color: "#5A5A56" }}>−</button>
+                        <span style={{ minWidth: "1rem", textAlign: "center", fontSize: "0.85rem", color: "#1A1A18" }} aria-live="polite">{item.qty}</span>
+                        <button type="button" onClick={() => onChangeQty(item.id, date, 1)} aria-label={`Agregar una unidad de ${item.name}`} className="w-6 h-6 rounded-full flex items-center justify-center transition-colors hover:bg-[#F0EBE1]" style={{ border: "1px solid #DDD8CF", color: "#2D4A22" }}>+</button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1514,6 +1540,20 @@ export default function App() {
 
   const removeFromCart = (id: number, date: string) => setCart((prev) => prev.filter((c) => !(c.id === id && c.date === date)));
 
+  // Suma o resta unidades de un plato ya presente en el carrito; si llega a 0 lo saca.
+  const adjustCartQty = (id: number, date: string, delta: number) => {
+    setCart((prev) => prev
+      .map((c) => c.id === id && c.date === date ? { ...c, qty: c.qty + delta } : c)
+      .filter((c) => c.qty > 0));
+  };
+
+  // Usado desde "Menú del día": suma con addToCart (crea el ítem si hace falta),
+  // resta con adjustCartQty (el ítem ya existe en el carrito en ese caso).
+  const changeQtyFromMenu = (item: MenuItem, date: string, delta: number) => {
+    if (delta > 0) addToCart(item, date, delta);
+    else adjustCartQty(item.id, date, delta);
+  };
+
   const confirmOrder = async () => {
     if (cart.length === 0) return;
     const items = cart.map((c) => ({ name: c.name, price: c.price, qty: c.qty, date: c.date }));
@@ -1605,7 +1645,7 @@ export default function App() {
     <div className="min-h-screen">
       <Nav cartCount={cartCount} onCartClick={() => setDrawerOpen(true)} onAdminClick={() => setAdminOpen(true)} />
       <Hero />
-      <MenuSection menuItems={menuItems} onAdd={addToCart} />
+      <MenuSection menuItems={menuItems} cart={cart} onChangeQty={changeQtyFromMenu} />
       <OrderSection menuItems={menuItems} onAdd={addToCart} note={orderNote} onNoteChange={setOrderNote} />
       <ViandasSection plans={weeklyPlans} />
       <GallerySection />
@@ -1613,7 +1653,7 @@ export default function App() {
       <Footer onAdminClick={() => setAdminOpen(true)} />
 
       {drawerOpen && (
-        <CartDrawer cart={cart} onClose={() => setDrawerOpen(false)} onRemove={removeFromCart} onClear={() => setCart([])} onConfirm={confirmOrder} />
+        <CartDrawer cart={cart} onClose={() => setDrawerOpen(false)} onRemove={removeFromCart} onChangeQty={adjustCartQty} onClear={() => setCart([])} onConfirm={confirmOrder} />
       )}
 
       {adminOpen && (
