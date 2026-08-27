@@ -100,6 +100,7 @@ export async function syncMenuItems(prev: MenuItem[], next: MenuItem[]): Promise
       image_url: item.img,
       tags: item.tags,
       available: item.available,
+      visible: item.visible,
       sort_order: item.sortOrder,
     });
     if (error) throw error;
@@ -121,6 +122,7 @@ export async function syncMenuItems(prev: MenuItem[], next: MenuItem[]): Promise
         image_url: item.img,
         tags: item.tags,
         available: item.available,
+        visible: item.visible,
         sort_order: item.sortOrder,
       })
       .eq("id", item.id);

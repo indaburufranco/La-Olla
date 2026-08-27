@@ -1013,7 +1013,7 @@ function AdminSubscribers({ subscribers, plans, onUpdate }: { subscribers: Weekl
   );
 }
 
-function ItemForm({ item, onChange, onSave, onCancel, saveLabel }: { item: Omit<MenuItem, "id"> & { id?: number }; onChange: (f: string, v: string | number) => void; onSave: () => void; onCancel: () => void; saveLabel: string }) {
+function ItemForm({ item, onChange, onSave, onCancel, saveLabel }: { item: Omit<MenuItem, "id"> & { id?: number }; onChange: (f: string, v: string | number | string[]) => void; onSave: () => void; onCancel: () => void; saveLabel: string }) {
   const fieldStyle = { border: "1px solid #DDD8CF", fontSize: "0.875rem", borderRadius: "0.5rem", padding: "0.5rem 0.75rem", width: "100%", outline: "none" };
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -1053,6 +1053,10 @@ function ItemForm({ item, onChange, onSave, onCancel, saveLabel }: { item: Omit<
           <select value={item.category} onChange={(e) => onChange("category", e.target.value)} style={fieldStyle}>
             {["entrada", "principal", "postre"].map((c) => <option key={c}>{c}</option>)}
           </select>
+        </div>
+        <div>
+          <label style={{ fontSize: "0.72rem", color: "#5A5A56", display: "block", marginBottom: "0.25rem" }}>Etiquetas (separadas por coma)</label>
+          <input type="text" value={item.tags.join(", ")} onChange={(e) => onChange("tags", e.target.value.split(",").map((t) => t.trim()).filter(Boolean))} placeholder="vegetariano, sin gluten" style={fieldStyle} />
         </div>
         <div className="sm:col-span-2">
           <label style={{ fontSize: "0.72rem", color: "#5A5A56", display: "block", marginBottom: "0.25rem" }}>Foto del plato</label>
