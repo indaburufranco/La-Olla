@@ -64,6 +64,64 @@ function waLink(message: string) {
   return `https://wa.me/${siteConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
 }
 
+// ─── Diálogo de confirmación (reemplaza al confirm() nativo del navegador) ────
+function ConfirmDialog({ message, confirmLabel, onConfirm, onCancel }: { message: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void }) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center px-6">
+      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onCancel} />
+      <div className="relative w-full max-w-sm rounded-2xl p-6" style={{ background: "#FFFFFF", border: "1px solid #DDD8CF" }}>
+        <p style={{ color: "#1A1A18", fontSize: "0.95rem", lineHeight: 1.5, marginBottom: "1.5rem" }}>{message}</p>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl text-sm transition-all hover:bg-gray-100" style={{ border: "1px solid #DDD8CF", color: "#5A5A56" }}>Cancelar</button>
+          <button onClick={onConfirm} autoFocus className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all hover:opacity-80" style={{ background: "#C4622D", color: "#FAF7F2" }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Hook chico para pedir confirmación sin el confirm() feo del navegador,
+// manteniendo la misma forma de uso: `if (await confirm("¿Borrar?")) ...`.
+function useConfirm() {
+  const [pending, setPending] = useState<{ message: string; confirmLabel: string; resolve: (v: boolean) => void } | null>(null);
+
+  const confirm = (message: string, confirmLabel = "Borrar") =>
+    new Promise<boolean>((resolve) => setPending({ message, confirmLabel, resolve }));
+
+  const respond = (value: boolean) => {
+    pending?.resolve(value);
+    setPending(null);
+  };
+
+  const dialog = pending ? (
+    <ConfirmDialog message={pending.message} confirmLabel={pending.confirmLabel} onConfirm={() => respond(true)} onCancel={() => respond(false)} />
+  ) : null;
+
+  return { confirm, dialog };
+}
+
+// ─── Aviso flotante (reemplaza al alert() nativo del navegador) ───────────────
+function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 6000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div role="alert" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-3rem)] max-w-md flex items-start gap-3 px-5 py-4 rounded-xl" style={{ background: "#1A1A18", color: "#FAF7F2", boxShadow: "0 12px 32px rgba(0,0,0,0.3)" }}>
+      <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>⚠️</span>
+      <p style={{ fontSize: "0.85rem", lineHeight: 1.5, flex: 1 }}>{message}</p>
+      <button onClick={onClose} aria-label="Cerrar aviso" className="flex-shrink-0 hover:opacity-70" style={{ color: "#8A8A84" }}>✕</button>
+    </div>
+  );
+}
+
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 function Nav({ cartCount, onCartClick, onAdminClick }: { cartCount: number; onCartClick: () => void; onAdminClick: () => void }) {
   return (
@@ -868,9 +926,15 @@ function AdminOrders({ orders, menuItems, onDelete, onStatusChange, onAddManual 
 }) {
   const statusColor: Record<string, string> = { pendiente: "#C4622D", confirmado: "#2D4A22", entregado: "#5A5A56" };
   const [showForm, setShowForm] = useState(false);
+  const { confirm, dialog } = useConfirm();
+
+  const handleDelete = async (id: string) => {
+    if (await confirm("¿Borrar este pedido?")) onDelete(id);
+  };
 
   return (
     <div>
+      {dialog}
       <div className="flex items-center justify-between mb-2">
         <h2 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.6rem", color: "#1A1A18" }}>Pedidos recibidos</h2>
         <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all hover:opacity-80" style={{ background: "#C4622D", color: "#FAF7F2", fontSize: "0.875rem" }}>
@@ -908,7 +972,7 @@ function AdminOrders({ orders, menuItems, onDelete, onStatusChange, onAddManual 
                     <option value="confirmado">confirmado</option>
                     <option value="entregado">entregado</option>
                   </select>
-                  <button onClick={() => { if (confirm("¿Borrar este pedido?")) onDelete(order.id); }} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-red-50" style={{ color: "#C4622D" }}>
+                  <button onClick={() => handleDelete(order.id)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-red-50" style={{ color: "#C4622D" }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                   </button>
                 </div>
@@ -954,12 +1018,16 @@ function AdminSubscribers({ subscribers, plans, onUpdate }: { subscribers: Weekl
     setShowForm(false);
   };
 
-  const remove = (id: string) => onUpdate(subscribers.filter((s) => s.id !== id));
+  const { confirm, dialog } = useConfirm();
+  const remove = async (id: string) => {
+    if (await confirm("¿Borrar este suscriptor?")) onUpdate(subscribers.filter((s) => s.id !== id));
+  };
 
   const planColors: Record<string, string> = { "Plan Básico": "#2D4A22", "Plan Completo": "#C4622D", "Plan Familiar": "#5A5A56" };
 
   return (
     <div>
+      {dialog}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.6rem", color: "#1A1A18" }}>Suscriptores semanales</h2>
@@ -1092,6 +1160,7 @@ function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibili
   const [showNew, setShowNew] = useState(false);
   const nextSortOrder = () => (menuItems.length > 0 ? Math.max(...menuItems.map((m) => m.sortOrder)) + 1 : 1);
   const [newItem, setNewItem] = useState<Omit<MenuItem, "id">>({ name: "", desc: "", price: 0, category: "principal", img: "", tags: [], available: true, visible: true, sortOrder: nextSortOrder() });
+  const { confirm, dialog } = useConfirm();
 
   const saveEdit = () => {
     if (!editing) return;
@@ -1099,7 +1168,9 @@ function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibili
     setEditing(null);
   };
 
-  const deleteItem = (id: number) => onUpdate(menuItems.filter((m) => m.id !== id));
+  const deleteItem = async (id: number) => {
+    if (await confirm("¿Borrar este plato del menú?")) onUpdate(menuItems.filter((m) => m.id !== id));
+  };
 
   const addNew = () => {
     if (!newItem.name.trim()) return;
@@ -1111,6 +1182,7 @@ function AdminMenu({ menuItems, onUpdate, onToggleAvailability, onToggleVisibili
 
   return (
     <div>
+      {dialog}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.6rem", color: "#1A1A18" }}>Editor de menú</h2>
@@ -1222,6 +1294,7 @@ function AdminPlans({ plans, onUpdate }: { plans: WeeklyPlan[]; onUpdate: (plans
   const [showNew, setShowNew] = useState(false);
   const blankPlan: Omit<WeeklyPlan, "id"> = { name: "", desc: "", price: 0, includes: [], highlight: false, bgColor: "#F0EBE1", accentColor: "#2D4A22", sortOrder: plans.length + 1 };
   const [newPlan, setNewPlan] = useState<Omit<WeeklyPlan, "id">>(blankPlan);
+  const { confirm, dialog } = useConfirm();
 
   const saveEdit = () => {
     if (!editing) return;
@@ -1229,8 +1302,8 @@ function AdminPlans({ plans, onUpdate }: { plans: WeeklyPlan[]; onUpdate: (plans
     setEditing(null);
   };
 
-  const deletePlan = (id: number) => {
-    if (confirm("¿Borrar este plan?")) onUpdate(plans.filter((p) => p.id !== id));
+  const deletePlan = async (id: number) => {
+    if (await confirm("¿Borrar este plan?")) onUpdate(plans.filter((p) => p.id !== id));
   };
 
   const addNew = () => {
@@ -1243,6 +1316,7 @@ function AdminPlans({ plans, onUpdate }: { plans: WeeklyPlan[]; onUpdate: (plans
 
   return (
     <div>
+      {dialog}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "1.6rem", color: "#1A1A18" }}>Planes de viandas semanales</h2>
@@ -1324,6 +1398,7 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   // Cargar menú, pedidos, suscriptores y planes desde Supabase al abrir la página
   useEffect(() => {
@@ -1352,7 +1427,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setMenuItems(prev); // si falló, volvemos atrás
-      alert("No se pudo guardar el cambio en el menú. Intentá de nuevo.");
+      setToast("No se pudo guardar el cambio en el menú. Intentá de nuevo.");
     }
   };
 
@@ -1364,7 +1439,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setMenuItems(prev);
-      alert("No se pudo actualizar la disponibilidad. Intentá de nuevo.");
+      setToast("No se pudo actualizar la disponibilidad. Intentá de nuevo.");
     }
   };
 
@@ -1376,7 +1451,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setMenuItems(prev);
-      alert("No se pudo actualizar la visibilidad. Intentá de nuevo.");
+      setToast("No se pudo actualizar la visibilidad. Intentá de nuevo.");
     }
   };
 
@@ -1399,7 +1474,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setMenuItems(prev);
-      alert("No se pudo reordenar el menú. Intentá de nuevo.");
+      setToast("No se pudo reordenar el menú. Intentá de nuevo.");
     }
   };
 
@@ -1412,7 +1487,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setSubscribers(prev);
-      alert("No se pudo guardar el cambio en los suscriptores. Intentá de nuevo.");
+      setToast("No se pudo guardar el cambio en los suscriptores. Intentá de nuevo.");
     }
   };
 
@@ -1425,7 +1500,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setWeeklyPlans(prev);
-      alert("No se pudo guardar el cambio en los planes. Intentá de nuevo.");
+      setToast("No se pudo guardar el cambio en los planes. Intentá de nuevo.");
     }
   };
 
@@ -1450,7 +1525,7 @@ export default function App() {
       setOrderNote("");
     } catch (err) {
       console.error(err);
-      alert("No se pudo registrar el pedido en la base de datos. El mensaje de WhatsApp se envía igual, pero avisale al admin.");
+      setToast("No se pudo registrar el pedido en la base de datos. El mensaje de WhatsApp se envía igual, pero avisale al admin.");
       setCart([]);
       setOrderNote("");
     }
@@ -1461,7 +1536,7 @@ export default function App() {
       setOrders(await deleteOrder(id));
     } catch (err) {
       console.error(err);
-      alert("No se pudo borrar el pedido. Intentá de nuevo.");
+      setToast("No se pudo borrar el pedido. Intentá de nuevo.");
     }
   };
 
@@ -1473,7 +1548,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setOrders(prev);
-      alert("No se pudo actualizar el estado del pedido. Intentá de nuevo.");
+      setToast("No se pudo actualizar el estado del pedido. Intentá de nuevo.");
     }
   };
 
@@ -1482,7 +1557,7 @@ export default function App() {
       setOrders(await createOrder(items, total, note));
     } catch (err) {
       console.error(err);
-      alert("No se pudo guardar el pedido manual. Intentá de nuevo.");
+      setToast("No se pudo guardar el pedido manual. Intentá de nuevo.");
     }
   };
 
@@ -1559,6 +1634,8 @@ export default function App() {
           onOrderAddManual={handleOrderAddManual}
         />
       )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }
